@@ -1,19 +1,65 @@
-FROM rust:1.72.0-bullseye AS builder
+FROM csegarragonz/dotfiles:0.2.0 as dotfiles
+FROM ubuntu:22.04
+
+# ---------------------------
+# Work. Env. Set-Up (do this first to benefit from caching)
+# ---------------------------
+
+# APT dependencies
+RUN apt update \
+    && apt upgrade -y \
+    && apt install -y \
+        curl \
+        git
+
+# Clone the dotfiles repo
+RUN rm -rf ~/dotfiles \
+    && mkdir -p ~/dotfiles \
+    && git clone https://github.com/csegarragonz/dotfiles ~/dotfiles
+
+# Configure Neovim
+COPY --from=dotfiles /neovim/build/bin/nvim /usr/bin/nvim
+COPY --from=dotfiles /usr/local/share/nvim /usr/local/share/nvim
+RUN curl -fLo ~/.local/share/nvim/site/autoload/plug.vim --create-dirs \
+        https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim \
+    && mkdir -p ~/.config/nvim/ \
+    && ln -sf ~/dotfiles/nvim/init.vim ~/.config/nvim/init.vim \
+    && ln -sf ~/dotfiles/nvim/after ~/.config/nvim/ \
+    && ln -sf ~/dotfiles/nvim/syntax ~/.config/nvim/ \
+    && nvim +PlugInstall +qa \
+    && nvim +PlugUpdate +qa
+
+# Configure Bash
+RUN ln -sf ~/dotfiles/bash/.bashrc ~/.bashrc \
+    && ln -sf ~/dotfiles/bash/.bash_profile ~/.bash_profile \
+    && ln -sf ~/dotfiles/bash/.bash_aliases ~/.bash_aliases
+
+# ---------------------------
+# Simple KBS Set-Up
+# ---------------------------
+
+# APT dependencies
+RUN apt update \
+    && apt upgrade -y \
+    && apt install -y \
+        gcc \
+        libssl-dev \
+        pkg-config
+
+# Install latest rust and rust-analyser
+RUN curl --proto '=https' --tlsv1.3 https://sh.rustup.rs -sSf | sh -s -- -y \
+    && curl -L \
+        https://github.com/rust-lang/rust-analyzer/releases/latest/download/rust-analyzer-x86_64-unknown-linux-gnu.gz \
+        | gunzip -c - > /usr/bin/rust-analyzer \
+    && chmod +x /usr/bin/rust-analyzer
+
+ENV PATH=${PATH}:/usr/local/go/bin:/root/.cargo/bin
 RUN rustup component add rustfmt
-WORKDIR /usr/src/simple-kbs
-COPY . .
-RUN cargo build --release
+COPY . /usr/src/simple-kbs
+RUN cd /usr/src/simple-kbs \
+    && cargo build --release \
+    && cp -r ./resources/ /usr/local/bin/resources/
 
-# -----------------------------------------------------------------------------
-
-# The rust:1 image is built using Debian bullseye, so use the same distro for
-# the final simple-kbs image
-FROM debian:bullseye
-
-WORKDIR /usr/local/bin
-COPY --from=builder /usr/src/simple-kbs/target/release/simple-kbs ./
-COPY default_policy.json ./
-COPY resources resources/
-
+RUN echo "export PATH=${PATH}:/usr/local/go/bin:/root/.cargo/bin" >> ~/.bashrc
 EXPOSE 44444
-CMD ["simple-kbs", "--grpc_sock=0.0.0.0:44444"]
+CMD ["/usr/src/simple-kbs/target/release/simple-kbs", "--grpc_sock=0.0.0.0:44444"]

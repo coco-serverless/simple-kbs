@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.simple-kbs
+    image: simple-kbs-server:latest
     restart: always
     environment:
       KBS_DB_TYPE: mysql
@@ -12,11 +13,25 @@ services:
       KBS_DB_USER: kbsuser
       KBS_DB_PW: kbspassword
       KBS_DB: simple_kbs
-      RUST_LOG: debug
+      RUST_LOG: info
     ports:
       - "44444:44444"
     depends_on:
       - db
+    volumes:
+      - .:/usr/src/simple-kbs
+    working_dir: /usr/src/simple-kbs
+
+  cli:
+    depends_on:
+      - server
+    entrypoint: bash
+    image: simple-kbs-server:latest
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/usr/src/simple-kbs
+    working_dir: /usr/src/simple-kbs
 
   db:
     build:
