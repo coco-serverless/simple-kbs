@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.simple-kbs
-    image: simple-kbs-server:latest
+    image: ${SIMPLE_KBS_IMAGE}
     restart: always
     environment:
       KBS_DB_TYPE: mysql
@@ -26,7 +26,7 @@ services:
     depends_on:
       - server
     entrypoint: bash
-    image: simple-kbs-server:latest
+    image: ${SIMPLE_KBS_IMAGE}
     stdin_open: true
     tty: true
     volumes:
